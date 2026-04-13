@@ -19,6 +19,7 @@ button { background:black; color:white; border:none; cursor:pointer; }
 .item { font-size:11px; display:flex; justify-content:space-between; }
 .delete-btn { background:red; margin-top:5px; }
 .small-btn { background:#666; font-size:10px; padding:3px 5px; }
+.footer { margin-top:10px; border-top:1px solid #ddd; padding-top:10px; }
 </style>
 </head>
 <body>
@@ -38,8 +39,19 @@ button { background:black; color:white; border:none; cursor:pointer; }
 <!-- 달력 패널 -->
 <div class="panel">
 <h3>달력</h3>
-<div id="monthLabel"></div>
+<div style="display:flex; gap:5px;">
+  <button onclick="changeMonth(-1)">◀</button>
+  <div id="monthLabel" style="flex:1; text-align:center;"></div>
+  <button onclick="changeMonth(1)">▶</button>
+</div>
 <div class="calendar" id="calendar"></div>
+
+<!-- ✅ 하단 요약 영역 -->
+<div class="footer">
+  <div id="monthTotal"></div>
+  <button class="delete-btn" onclick="deleteMonth()">이번달 전체삭제</button>
+</div>
+
 </div>
 
 </div>
@@ -48,10 +60,13 @@ button { background:black; color:white; border:none; cursor:pointer; }
 const cards = ["삼성카드","우리카드","롯데카드","현대카드","비씨카드","신한카드","농협NH카드","KB카드","하나카드"];
 let selectedCard = null;
 
-// ✅ 저장된 데이터 불러오기
+// ✅ 저장 데이터
 let entries = JSON.parse(localStorage.getItem('entries') || '[]');
 
-// 카드 탭 생성
+// ✅ 현재 보고 있는 달
+let current = new Date();
+
+// 카드 탭
 const tabContainer = document.getElementById('cardTabs');
 cards.forEach(card => {
   const btn = document.createElement('div');
@@ -81,13 +96,17 @@ function addEntry() {
   document.getElementById('amount').value = '';
 }
 
+function changeMonth(diff){
+  current.setMonth(current.getMonth() + diff);
+  render();
+}
+
 function render() {
   const cal = document.getElementById('calendar');
   cal.innerHTML = '';
 
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
+  const year = current.getFullYear();
+  const month = current.getMonth();
 
   document.getElementById('monthLabel').innerText = `${year}년 ${month+1}월`;
 
@@ -95,16 +114,20 @@ function render() {
   const lastDate = new Date(year, month+1, 0).getDate();
 
   const grouped = {};
+  let monthTotal = 0;
 
   entries.forEach((e, idx) => {
-    if(!grouped[e.date]) grouped[e.date] = [];
-    grouped[e.date].push({...e, idx});
+    const d = new Date(e.date);
+    if(d.getFullYear() === year && d.getMonth() === month){
+      if(!grouped[e.date]) grouped[e.date] = [];
+      grouped[e.date].push({...e, idx});
+      monthTotal += e.amount;
+    }
   });
 
   // 빈칸
   for(let i=0;i<firstDay;i++){
-    const empty = document.createElement('div');
-    cal.appendChild(empty);
+    cal.appendChild(document.createElement('div'));
   }
 
   for(let d=1; d<=lastDate; d++){
@@ -135,17 +158,26 @@ function render() {
           </div>`;
         });
       });
-
-      html += `<button class='delete-btn' onclick="deleteDate('${dateStr}')">전체삭제</button>`;
     }
 
     div.innerHTML = html;
     cal.appendChild(div);
   }
+
+  // ✅ 월 전체 합계 표시
+  document.getElementById('monthTotal').innerText = `이번달 총 합계: ${monthTotal.toLocaleString()}원`;
 }
 
-function deleteDate(date) {
-  entries = entries.filter(e => e.date !== date);
+// ✅ 월 전체 삭제
+function deleteMonth(){
+  const year = current.getFullYear();
+  const month = current.getMonth();
+
+  entries = entries.filter(e => {
+    const d = new Date(e.date);
+    return !(d.getFullYear() === year && d.getMonth() === month);
+  });
+
   save();
   render();
 }
