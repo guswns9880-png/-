@@ -8,7 +8,7 @@
 body { font-family: sans-serif; margin:0; background:#f5f5f5; }
 .wrap { display:flex; gap:10px; padding:10px; }
 .panel { flex:1; background:#fff; padding:15px; border-radius:10px; }
-input, button { width:100%; padding:10px; margin:5px 0; }
+input, button, select { width:100%; padding:10px; margin:5px 0; }
 button { background:black; color:white; border:none; cursor:pointer; }
 .tabs { display:flex; flex-wrap:wrap; gap:5px; }
 .tab { padding:8px 10px; border:1px solid #ddd; border-radius:6px; cursor:pointer; }
@@ -29,6 +29,11 @@ button { background:black; color:white; border:none; cursor:pointer; }
 <!-- 입력 패널 -->
 <div class="panel">
 <h3>데이터 입력</h3>
+
+<label>매출일</label>
+<input type="date" id="salesDate">
+
+<label>입금예정일</label>
 <input type="date" id="date">
 
 <div class="tabs" id="cardTabs"></div>
@@ -40,14 +45,20 @@ button { background:black; color:white; border:none; cursor:pointer; }
 <!-- 달력 패널 -->
 <div class="panel">
 <h3>달력</h3>
+
+<select id="calendarType" onchange="render()">
+  <option value="deposit">입금예정일 달력</option>
+  <option value="sales">매출일 달력</option>
+</select>
+
 <div style="display:flex; gap:5px;">
   <button onclick="changeMonth(-1)">◀</button>
   <div id="monthLabel" style="flex:1; text-align:center;"></div>
   <button onclick="changeMonth(1)">▶</button>
 </div>
+
 <div class="calendar" id="calendar"></div>
 
-<!-- ✅ 하단 요약 영역 -->
 <div class="footer">
   <div id="monthTotal"></div>
   <button class="delete-btn" onclick="deleteMonth()">이번달 전체삭제</button>
@@ -61,13 +72,9 @@ button { background:black; color:white; border:none; cursor:pointer; }
 const cards = ["삼성카드","우리카드","롯데카드","현대카드","비씨카드","신한카드","농협NH카드","KB카드","하나카드"];
 let selectedCard = null;
 
-// ✅ 저장 데이터
 let entries = JSON.parse(localStorage.getItem('entries') || '[]');
-
-// ✅ 현재 보고 있는 달
 let current = new Date();
 
-// 카드 탭
 const tabContainer = document.getElementById('cardTabs');
 cards.forEach(card => {
   const btn = document.createElement('div');
@@ -86,18 +93,18 @@ function save() {
 }
 
 function addEntry() {
+  const salesDate = document.getElementById('salesDate').value;
   const date = document.getElementById('date').value;
   const amount = document.getElementById('amount').value;
 
-  if(!date || !selectedCard || !amount) return;
+  if(!salesDate || !date || !selectedCard || !amount) return;
 
-  entries.push({date, card: selectedCard, amount: Number(amount)});
+  entries.push({salesDate, date, card: selectedCard, amount: Number(amount)});
   save();
   render();
   document.getElementById('amount').value = '';
 }
 
-// ✅ 엔터 입력 시 추가 실행
 window.addEventListener('keypress', function(e){
   if(e.key === 'Enter') addEntry();
 });
@@ -111,10 +118,12 @@ function render() {
   const cal = document.getElementById('calendar');
   cal.innerHTML = '';
 
+  const type = document.getElementById('calendarType').value;
+
   const year = current.getFullYear();
   const month = current.getMonth();
 
-  document.getElementById('monthLabel').innerText = `${year}년 ${month+1}월`;
+  document.getElementById('monthLabel').innerText = `${year}년 ${month+1}월 (${type === 'deposit' ? '입금예정일' : '매출일'})`;
 
   const firstDay = new Date(year, month, 1).getDay();
   const lastDate = new Date(year, month+1, 0).getDate();
@@ -123,15 +132,16 @@ function render() {
   let monthTotal = 0;
 
   entries.forEach((e, idx) => {
-    const d = new Date(e.date);
+    const targetDate = type === 'deposit' ? e.date : (e.salesDate || e.date);
+    const d = new Date(targetDate);
+
     if(d.getFullYear() === year && d.getMonth() === month){
-      if(!grouped[e.date]) grouped[e.date] = [];
-      grouped[e.date].push({...e, idx});
+      if(!grouped[targetDate]) grouped[targetDate] = [];
+      grouped[targetDate].push({...e, idx});
       monthTotal += e.amount;
     }
   });
 
-  // 빈칸
   for(let i=0;i<firstDay;i++){
     cal.appendChild(document.createElement('div'));
   }
@@ -155,7 +165,6 @@ function render() {
         cardMap[item.card].items.push(item);
       });
 
-      // ✅ 날짜 총합 표시 (추가된 기능)
       html = `<div class='day-total'>총합: ${dayTotal.toLocaleString()}원</div>` + html;
 
       Object.keys(cardMap).forEach(card => {
@@ -175,17 +184,17 @@ function render() {
     cal.appendChild(div);
   }
 
-  // ✅ 월 전체 합계 표시
   document.getElementById('monthTotal').innerText = `이번달 총 합계: ${monthTotal.toLocaleString()}원`;
 }
 
-// ✅ 월 전체 삭제
 function deleteMonth(){
+  const type = document.getElementById('calendarType').value;
   const year = current.getFullYear();
   const month = current.getMonth();
 
   entries = entries.filter(e => {
-    const d = new Date(e.date);
+    const targetDate = type === 'deposit' ? e.date : (e.salesDate || e.date);
+    const d = new Date(targetDate);
     return !(d.getFullYear() === year && d.getMonth() === month);
   });
 
