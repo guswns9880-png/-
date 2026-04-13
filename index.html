@@ -5,74 +5,158 @@
 <title>입금 관리 앱</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body { font-family: sans-serif; padding:20px; background:#f5f5f5;}
-.container { max-width:600px; margin:auto; background:#fff; padding:20px; border-radius:10px;}
+body { font-family: sans-serif; margin:0; background:#f5f5f5; }
+.wrap { display:flex; gap:10px; padding:10px; }
+.panel { flex:1; background:#fff; padding:15px; border-radius:10px; }
 input, button { width:100%; padding:10px; margin:5px 0; }
-button { background:black; color:white; border:none; cursor:pointer;}
-.entry { border-bottom:1px solid #ddd; padding:10px 0;}
+button { background:black; color:white; border:none; cursor:pointer; }
+.tabs { display:flex; flex-wrap:wrap; gap:5px; }
+.tab { padding:8px 10px; border:1px solid #ddd; border-radius:6px; cursor:pointer; }
+.tab.active { background:black; color:white; }
+.calendar { display:grid; grid-template-columns: repeat(7, 1fr); gap:5px; }
+.day { border:1px solid #ddd; min-height:100px; padding:5px; font-size:12px; }
+.day strong { display:block; }
+.item { font-size:11px; display:flex; justify-content:space-between; }
+.delete-btn { background:red; margin-top:5px; }
+.small-btn { background:#666; font-size:10px; padding:3px 5px; }
 </style>
 </head>
 <body>
-<div class="container">
-<h2>입금 예정 관리</h2>
+<div class="wrap">
 
+<!-- 입력 패널 -->
+<div class="panel">
+<h3>데이터 입력</h3>
 <input type="date" id="date">
-<input type="text" id="card" placeholder="카드사">
+
+<div class="tabs" id="cardTabs"></div>
+
 <input type="number" id="amount" placeholder="금액">
-
 <button onclick="addEntry()">추가</button>
+</div>
 
-<hr>
+<!-- 달력 패널 -->
+<div class="panel">
+<h3>달력</h3>
+<div id="monthLabel"></div>
+<div class="calendar" id="calendar"></div>
+</div>
 
-<div id="list"></div>
 </div>
 
 <script>
-let entries = [];
+const cards = ["삼성카드","우리카드","롯데카드","현대카드","비씨카드","신한카드","농협NH카드","KB카드","하나카드"];
+let selectedCard = null;
+
+// ✅ 저장된 데이터 불러오기
+let entries = JSON.parse(localStorage.getItem('entries') || '[]');
+
+// 카드 탭 생성
+const tabContainer = document.getElementById('cardTabs');
+cards.forEach(card => {
+  const btn = document.createElement('div');
+  btn.className = 'tab';
+  btn.innerText = card;
+  btn.onclick = () => {
+    selectedCard = card;
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    btn.classList.add('active');
+  };
+  tabContainer.appendChild(btn);
+});
+
+function save() {
+  localStorage.setItem('entries', JSON.stringify(entries));
+}
 
 function addEntry() {
   const date = document.getElementById('date').value;
-  const card = document.getElementById('card').value;
   const amount = document.getElementById('amount').value;
 
-  if(!date || !card || !amount) return;
+  if(!date || !selectedCard || !amount) return;
 
-  entries.push({date, card, amount: Number(amount)});
+  entries.push({date, card: selectedCard, amount: Number(amount)});
+  save();
   render();
-
-  document.getElementById('card').value = '';
   document.getElementById('amount').value = '';
 }
 
 function render() {
-  const list = document.getElementById('list');
-  list.innerHTML = '';
+  const cal = document.getElementById('calendar');
+  cal.innerHTML = '';
+
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+
+  document.getElementById('monthLabel').innerText = `${year}년 ${month+1}월`;
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const lastDate = new Date(year, month+1, 0).getDate();
 
   const grouped = {};
 
-  entries.forEach(e => {
+  entries.forEach((e, idx) => {
     if(!grouped[e.date]) grouped[e.date] = [];
-    grouped[e.date].push(e);
+    grouped[e.date].push({...e, idx});
   });
 
-  Object.keys(grouped).forEach(date => {
+  // 빈칸
+  for(let i=0;i<firstDay;i++){
+    const empty = document.createElement('div');
+    cal.appendChild(empty);
+  }
+
+  for(let d=1; d<=lastDate; d++){
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
     const div = document.createElement('div');
-    div.className = 'entry';
+    div.className = 'day';
 
-    let total = 0;
-    let html = `<strong>${date}</strong><br>`;
+    let html = `<strong>${d}</strong>`;
 
-    grouped[date].forEach(i => {
-      total += i.amount;
-      html += `${i.card} : ${i.amount.toLocaleString()}원<br>`;
-    });
+    if(grouped[dateStr]){
+      const cardMap = {};
 
-    html += `<strong>합계: ${total.toLocaleString()}원</strong>`;
+      grouped[dateStr].forEach(item => {
+        if(!cardMap[item.card]) cardMap[item.card] = {total:0, items:[]};
+        cardMap[item.card].total += item.amount;
+        cardMap[item.card].items.push(item);
+      });
+
+      Object.keys(cardMap).forEach(card => {
+        const c = cardMap[card];
+        html += `<div>${card} (${c.items.length}건) : ${c.total.toLocaleString()}원</div>`;
+
+        c.items.forEach(i => {
+          html += `<div class='item'>
+            <span>└ ${i.amount.toLocaleString()}원</span>
+            <button class='small-btn' onclick='deleteOne(${i.idx})'>삭제</button>
+          </div>`;
+        });
+      });
+
+      html += `<button class='delete-btn' onclick="deleteDate('${dateStr}')">전체삭제</button>`;
+    }
+
     div.innerHTML = html;
-
-    list.appendChild(div);
-  });
+    cal.appendChild(div);
+  }
 }
+
+function deleteDate(date) {
+  entries = entries.filter(e => e.date !== date);
+  save();
+  render();
+}
+
+function deleteOne(idx) {
+  entries.splice(idx,1);
+  save();
+  render();
+}
+
+render();
 </script>
 
 </body>
